@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Properties inherited from Directory.Build.props -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Package versions are centrally managed in Directory.Packages.props -->
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>
