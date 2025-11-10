@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Common package references with versions -->
+    <!-- Example: Add package versions here as needed -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+</Project>
