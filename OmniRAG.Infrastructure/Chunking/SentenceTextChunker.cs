@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using OmniRAG.Core.Interfaces;
+using OmniRAG.Core.Models;
 using System.Text.RegularExpressions;
 
 namespace OmniRAG.Infrastructure.Chunking;

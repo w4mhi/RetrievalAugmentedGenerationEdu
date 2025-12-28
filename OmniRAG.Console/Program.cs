@@ -23,6 +23,18 @@ using System.ComponentModel.DataAnnotations;
 namespace OmniRAG.Console;
 
 /// <summary>
+/// Configuration paths container for service registration.
+/// Reduces parameter count in helper methods (Rule 16).
+/// </summary>
+internal class ConfigurationPaths
+{
+    public required string PythonDll { get; init; }
+    public required string PythonHome { get; init; }
+    public required string ChromaDir { get; init; }
+    public required string PdfDirectory { get; init; }
+}
+
+/// <summary>
 /// Main program entry point.
 /// Clean Architecture: Composition root for dependency injection.
 /// </summary>
@@ -270,39 +282,70 @@ public class Program
         int topK,
         float minSimilarity)
     {
-        // Configuration
         services.AddSingleton(configuration);
 
-        // Infrastructure services
-        string pythonDll = configuration["OmniRAG:Python:DllPath"] 
-            ?? throw new InvalidOperationException("Python DLL path not configured");
-        string pythonHome = configuration["OmniRAG:Python:HomePath"] 
-            ?? throw new InvalidOperationException("Python home path not configured");
-        string chromaDir = configuration["OmniRAG:ChromaPersistDirectory"] 
-            ?? throw new InvalidOperationException("Chroma persist directory not configured");
-        string pdfDirectory = configuration["OmniRAG:PdfDirectory"]
-            ?? throw new InvalidOperationException("PDF directory not configured");
+        ConfigurationPaths paths = ExtractConfigurationPaths(configuration);
+        RegisterInfrastructureServices(services, embeddingStrategy, chunkingStrategy, chunkSize, overlap, paths);
+        
+        RetrievalOptions retrievalOptions = RetrievalOptions.Create(
+            retrievalStrategy,
+            topK,
+            minSimilarity >= 0 ? minSimilarity : null);
 
-        // Document Repository - Repository Pattern for document storage abstraction
+        ConfigureLanguageModel(services, configuration);
+        RegisterRagEngine(services, retrievalOptions);
+        ConfigureDocumentMonitoring(services, configuration);
+        RegisterApplication(services);
+    }
+
+    /// <summary>
+    /// Extracts and validates required configuration paths.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static ConfigurationPaths ExtractConfigurationPaths(IConfiguration configuration)
+    {
+        return new ConfigurationPaths
+        {
+            PythonDll = configuration["OmniRAG:Python:DllPath"] 
+                ?? throw new InvalidOperationException("Python DLL path not configured"),
+            PythonHome = configuration["OmniRAG:Python:HomePath"] 
+                ?? throw new InvalidOperationException("Python home path not configured"),
+            ChromaDir = configuration["OmniRAG:ChromaPersistDirectory"] 
+                ?? throw new InvalidOperationException("Chroma persist directory not configured"),
+            PdfDirectory = configuration["OmniRAG:PdfDirectory"]
+                ?? throw new InvalidOperationException("PDF directory not configured")
+        };
+    }
+
+    /// <summary>
+    /// Registers all infrastructure services.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static void RegisterInfrastructureServices(
+        IServiceCollection services,
+        EmbeddingStrategy embeddingStrategy,
+        ChunkingStrategy chunkingStrategy,
+        int chunkSize,
+        int overlap,
+        ConfigurationPaths paths)
+    {
         services.AddSingleton<IDocumentRepository>(sp =>
             new FileSystemDocumentRepository(
-                pdfDirectory,
+                paths.PdfDirectory,
                 sp.GetService<ILogger<FileSystemDocumentRepository>>()));
 
-        // Embedding service based on selected strategy
         services.AddSingleton<IEmbeddingService>(sp => 
             EmbeddingServiceFactory.Create(
                 embeddingStrategy, 
-                pythonDll, 
-                pythonHome, 
+                paths.PythonDll, 
+                paths.PythonHome, 
                 sp.GetService<ILoggerFactory>()));
         
         services.AddSingleton<IVectorStore>(sp => 
             new ChromaVectorStore(
-                chromaDir, 
+                paths.ChromaDir, 
                 sp.GetService<ILogger<ChromaVectorStore>>()));
         
-        // Text chunker based on selected strategy
         services.AddSingleton<ITextChunker>(sp => 
             TextChunkerFactory.Create(
                 chunkingStrategy, 
@@ -310,61 +353,19 @@ public class Program
                 overlap, 
                 sp.GetService<ILoggerFactory>()));
 
-        // Document loader with chunker dependency injection
         services.AddSingleton<IDocumentLoader>(sp => 
             new PdfDocumentLoader(
                 sp.GetRequiredService<IEmbeddingService>(),
                 sp.GetRequiredService<ITextChunker>(),
                 sp.GetService<ILogger<PdfDocumentLoader>>()));
+    }
 
-        // Create retrieval options based on CLI parameters
-        RetrievalOptions retrievalOptions = RetrievalOptions.Create(
-            retrievalStrategy,
-            topK,
-            minSimilarity >= 0 ? minSimilarity : null);
-
-        // Language Model (optional - graceful degradation if not configured)
-        bool phi4Enabled = configuration.GetValue<bool>("OmniRAG:Phi4:Enabled", false);
-        if (phi4Enabled)
-        {
-            string? modelPath = configuration["OmniRAG:Phi4:ModelPath"];
-            int maxTokens = configuration.GetValue<int>("OmniRAG:Phi4:MaxTokens", 2048);
-            float temperature = configuration.GetValue<float>("OmniRAG:Phi4:Temperature", 0.7f);
-
-            if (!string.IsNullOrWhiteSpace(modelPath))
-            {
-                try
-                {
-                    services.AddSingleton<ILanguageModel>(sp => 
-                        new Phi4LanguageModel(
-                            modelPath, 
-                            maxTokens, 
-                            temperature, 
-                            sp.GetService<ILogger<Phi4LanguageModel>>()));
-                    
-                    AnsiConsole.MarkupLine("[green]✓[/] Phi-4 language model enabled");
-                }
-                catch (Exception ex)
-                {
-                    AnsiConsole.MarkupLine($"[yellow]⚠[/] Phi-4 initialization failed: {ex.Message}");
-                    AnsiConsole.MarkupLine("[yellow]  Running in retrieval-only mode[/]");
-                    services.AddSingleton<ILanguageModel>(sp => null!);
-                }
-            }
-            else
-            {
-                AnsiConsole.MarkupLine("[yellow]⚠[/] Phi-4 model path not configured");
-                AnsiConsole.MarkupLine("[yellow]  Running in retrieval-only mode[/]");
-                services.AddSingleton<ILanguageModel>(sp => null!);
-            }
-        }
-        else
-        {
-            AnsiConsole.MarkupLine("[dim]ℹ Phi-4 disabled in configuration (retrieval-only mode)[/]");
-            services.AddSingleton<ILanguageModel>(sp => null!);
-        }
-
-        // Core services (depends on infrastructure)
+    /// <summary>
+    /// Registers the RAG engine with all dependencies.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static void RegisterRagEngine(IServiceCollection services, RetrievalOptions retrievalOptions)
+    {
         services.AddSingleton<IRagEngine>(sp =>
         {
             ILogger<RagEngine>? logger = sp.GetService<ILogger<RagEngine>>();
@@ -376,36 +377,19 @@ public class Program
                 retrievalOptions,
                 logger);
         });
+    }
 
-        // Document monitoring (optional - for auto-indexing)
-        bool enableAutoIndexing = configuration.GetValue<bool>("OmniRAG:EnableAutoIndexing", true);
-        if (enableAutoIndexing)
-        {
-            string pdfDirectoryPath = configuration["OmniRAG:PdfDirectory"] 
-                ?? throw new InvalidOperationException("PDF directory not configured");
-            
-            string fullPdfPath = Path.IsPathRooted(pdfDirectoryPath) 
-                ? pdfDirectoryPath 
-                : Path.GetFullPath(pdfDirectoryPath);
-
-            services.AddSingleton<IDocumentMonitor>(sp =>
-            {
-                ILogger<PdfDirectoryMonitor>? logger = sp.GetService<ILogger<PdfDirectoryMonitor>>();
-                return new PdfDirectoryMonitor(fullPdfPath, logger);
-            });
-
-            AnsiConsole.MarkupLine("[green]✓[/] Document monitoring enabled");
-        }
-        else
-        {
-            AnsiConsole.MarkupLine("[dim]ℹ Document monitoring disabled[/]");
-        }
-
-        // Application
+    /// <summary>
+    /// Registers the main application service.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static void RegisterApplication(IServiceCollection services)
+    {
         services.AddSingleton(sp =>
         {
             IDocumentMonitor? monitor = sp.GetService<IDocumentMonitor>();
             IDocumentRepository? repository = sp.GetService<IDocumentRepository>();
+            IConfiguration configuration = sp.GetRequiredService<IConfiguration>();
             return new OmniRAGApp(
                 sp.GetRequiredService<IRagEngine>(),
                 configuration,
@@ -413,6 +397,93 @@ public class Program
                 repository,
                 sp.GetService<ILogger<OmniRAGApp>>());
         });
+    }
+
+    /// <summary>
+    /// Configures the language model service with graceful degradation.
+    /// Reduces deep nesting in ConfigureServices method (Rule 17).
+    /// </summary>
+    private static void ConfigureLanguageModel(IServiceCollection services, IConfiguration configuration)
+    {
+        bool phi4Enabled = configuration.GetValue<bool>("OmniRAG:Phi4:Enabled", false);
+        if (!phi4Enabled)
+        {
+            AnsiConsole.MarkupLine("[dim]ℹ Phi-4 disabled in configuration (retrieval-only mode)[/]");
+            services.AddSingleton<ILanguageModel>(sp => null!);
+            return;
+        }
+
+        string? modelPath = configuration["OmniRAG:Phi4:ModelPath"];
+        if (string.IsNullOrWhiteSpace(modelPath))
+        {
+            AnsiConsole.MarkupLine("[yellow]⚠[/] Phi-4 model path not configured");
+            AnsiConsole.MarkupLine("[yellow]  Running in retrieval-only mode[/]");
+            services.AddSingleton<ILanguageModel>(sp => null!);
+            return;
+        }
+
+        int maxTokens = configuration.GetValue<int>("OmniRAG:Phi4:MaxTokens", 2048);
+        float temperature = configuration.GetValue<float>("OmniRAG:Phi4:Temperature", 0.7f);
+
+        TryRegisterPhi4LanguageModel(services, modelPath, maxTokens, temperature);
+    }
+
+    /// <summary>
+    /// Attempts to register Phi-4 language model with error handling.
+    /// Reduces deep nesting (Rule 17).
+    /// </summary>
+    private static void TryRegisterPhi4LanguageModel(
+        IServiceCollection services, 
+        string modelPath, 
+        int maxTokens, 
+        float temperature)
+    {
+        try
+        {
+            services.AddSingleton<ILanguageModel>(sp => 
+                new Phi4LanguageModel(
+                    modelPath, 
+                    maxTokens, 
+                    temperature, 
+                    sp.GetService<ILogger<Phi4LanguageModel>>()));
+            
+            AnsiConsole.MarkupLine("[green]✓[/] Phi-4 language model enabled");
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[yellow]⚠[/] Phi-4 initialization failed: {ex.Message}");
+            AnsiConsole.MarkupLine("[yellow]  Running in retrieval-only mode[/]");
+            services.AddSingleton<ILanguageModel>(sp => null!);
+        }
+    }
+
+    /// <summary>
+    /// Configures document monitoring service.
+    /// Reduces deep nesting in ConfigureServices method (Rule 17).
+    /// </summary>
+    private static void ConfigureDocumentMonitoring(IServiceCollection services, IConfiguration configuration)
+    {
+        bool enableAutoIndexing = configuration.GetValue<bool>("OmniRAG:EnableAutoIndexing", true);
+        if (!enableAutoIndexing)
+        {
+            AnsiConsole.MarkupLine("[dim]ℹ Document monitoring disabled[/]");
+            return;
+        }
+
+        string pdfDirectoryPath = configuration["OmniRAG:PdfDirectory"] 
+            ?? throw new InvalidOperationException("PDF directory not configured");
+        
+        string fullPdfPath = Path.IsPathRooted(pdfDirectoryPath) 
+            ? pdfDirectoryPath 
+            : Path.GetFullPath(pdfDirectoryPath);
+
+        services.AddSingleton<IDocumentMonitor>(sp =>
+        {
+            ILogger<PdfDirectoryMonitor>? logger = sp.GetService<ILogger<PdfDirectoryMonitor>>();
+            return new PdfDirectoryMonitor(fullPdfPath, logger);
+        });
+
+        AnsiConsole.MarkupLine("[green]✓[/] Document monitoring enabled");
     }
 
     private static void DisplayBanner()

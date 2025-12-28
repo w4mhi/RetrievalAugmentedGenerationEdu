@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Polly;
+using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Infrastructure.Resilience;
 using System.Collections.Concurrent;
@@ -319,9 +320,9 @@ public sealed class OnnxEmbeddingService : IEmbeddingService, IDisposable
 internal class BertTokenizer
 {
     private readonly int maxTokens;
-    private const int ClsTokenId = 101;  // [CLS] token
-    private const int SepTokenId = 102;  // [SEP] token
-    private const int PadTokenId = 0;    // [PAD] token
+    private const int ClsTokenId = DefaultValues.ClsTokenId;  // [CLS] token
+    private const int SepTokenId = DefaultValues.SepTokenId;  // [SEP] token
+    private const int PadTokenId = DefaultValues.PadTokenId;    // [PAD] token
 
     public BertTokenizer(string tokenizerPath, int maxTokens)
     {
@@ -352,7 +353,7 @@ internal class BertTokenizer
                 break;
             }
 
-            tokens[position] = (long)Math.Clamp((int)c, 0, 30000); // Simple mapping
+            tokens[position] = (long)Math.Clamp((int)c, 0, DefaultValues.MaxCharacterTokenValue); // Simple mapping
             attentionMask[position] = 1;
             tokenTypeIds[position] = 0; // First sentence segment
             position++;

@@ -1,5 +1,7 @@
 namespace OmniRAG.Core.Interfaces;
 
+using OmniRAG.Core.Models;
+
 /// <summary>
 /// Interface for text chunking strategies.
 /// Strategy Pattern: Defines contract for different chunking algorithms.

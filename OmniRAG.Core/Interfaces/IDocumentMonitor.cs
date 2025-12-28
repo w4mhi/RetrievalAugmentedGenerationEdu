@@ -1,5 +1,7 @@
 namespace OmniRAG.Core.Interfaces;
 
+using OmniRAG.Core.Models;
+
 /// <summary>
 /// Monitors a directory for document changes and triggers automatic indexing.
 /// Design Pattern: Observer pattern for file system events.

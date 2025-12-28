@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Polly;
+using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 using OmniRAG.Infrastructure.Resilience;
@@ -20,7 +21,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
     private readonly IAsyncPolicy<object?> storePolicy;
     private readonly IAsyncPolicy<IReadOnlyList<SearchResult>> searchPolicy;
     private bool disposed;
-    private const string CollectionName = "radio_expert_documents";
+    private const string CollectionName = CollectionNames.RadioExpertDocuments;
 
     public ChromaVectorStore(string persistDirectory, ILogger<ChromaVectorStore>? logger = null)
     {
@@ -36,7 +37,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
             this.logger,
             "VectorStoreSearch");
 
-        this.logger?.LogDebug("Initializing ChromaVectorStore with persist directory: {PersistDirectory}", persistDirectory);
+        this.logger?.LogDebug(LogMessages.InitializingVectorStore, persistDirectory);
 
         try
         {
@@ -60,12 +61,12 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
                     metadata: new { description = "OmniRAG technical manual chunks" }.ToPython());
                 
                 Console.WriteLine($"ChromaDB collection ready: {CollectionName}");
-                this.logger?.LogInformation("ChromaDB collection ready: {CollectionName} at {PersistDirectory}", CollectionName, persistDirectory);
+                this.logger?.LogInformation(LogMessages.VectorStoreReady, CollectionName, persistDirectory);
             }
         }
         catch (Exception ex)
         {
-            this.logger?.LogError(ex, "Failed to initialize ChromaVectorStore: {ErrorMessage}", ex.Message);
+            this.logger?.LogError(ex, LogMessages.VectorStoreInitializationFailed, ex.Message);
             throw;
         }
     }
@@ -80,7 +81,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
             return;
         }
 
-        this.logger?.LogDebug("Storing {ChunkCount} chunks in vector store", chunkList.Count);
+        this.logger?.LogDebug(LogMessages.StoringChunksInVectorStore, chunkList.Count);
 
         try
         {
@@ -138,11 +139,11 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
             });
 
             Console.WriteLine($"Stored {chunkList.Count} chunks in vector store");
-            this.logger?.LogInformation("Successfully stored {ChunkCount} chunks in vector store", chunkList.Count);
+            this.logger?.LogInformation(LogMessages.StoredChunksSuccessfully, chunkList.Count);
     }
     catch (Exception ex)
     {
-        this.logger?.LogError(ex, "Error storing chunks in vector store: {ErrorMessage}", ex.Message);
+        this.logger?.LogError(ex, LogMessages.ErrorStoringChunks, ex.Message);
         throw;
     }
 }
@@ -166,7 +167,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
         
         options.Validate();
 
-        this.logger?.LogDebug("Searching vector store with strategy: {Strategy}, topK: {TopK}", options.Strategy, options.TopK);
+        this.logger?.LogDebug(LogMessages.SearchingVectorStoreWithStrategy, options.Strategy, options.TopK);
 
         try
         {
@@ -197,7 +198,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
                             n_results: retrievalCount);
 
                         IReadOnlyList<SearchResult> searchResults = ApplyRetrievalStrategy(results, options);
-                        this.logger?.LogDebug("Search completed, returning {ResultCount} results", searchResults.Count);
+                    this.logger?.LogDebug(LogMessages.SearchCompleted, searchResults.Count);
                         return searchResults;
                     }
                 }, cancellationToken);
@@ -205,7 +206,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
     }
     catch (Exception ex)
     {
-        this.logger?.LogError(ex, "Error searching vector store: {ErrorMessage}", ex.Message);
+        this.logger?.LogError(ex, LogMessages.ErrorSearchingVectorStore, ex.Message);
         throw;
     }
 }
@@ -362,52 +363,103 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
         }
 
         List<SearchResult> selectedResults = new List<SearchResult>();
-        List<SearchResult> remainingResults = results
-            .Where(r => r.RelevanceScore >= options.MinSimilarity)
-            .OrderByDescending(r => r.RelevanceScore)
-            .ToList();
+        List<SearchResult> remainingResults = FilterAndSortResults(results, options.MinSimilarity);
 
         if (remainingResults.Count == 0)
         {
             return remainingResults;
         }
 
-        // Start with most relevant result
         selectedResults.Add(remainingResults[0]);
         remainingResults.RemoveAt(0);
 
-        // Iteratively select results balancing relevance and diversity
+        SelectDiverseResults(selectedResults, remainingResults, options);
+
+        return RerankSelectedResults(selectedResults);
+    }
+
+    /// <summary>
+    /// Filters results by minimum similarity and sorts by relevance.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static List<SearchResult> FilterAndSortResults(List<SearchResult> results, float minSimilarity)
+    {
+        return results
+            .Where(r => r.RelevanceScore >= minSimilarity)
+            .OrderByDescending(r => r.RelevanceScore)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Iteratively selects diverse results using MMR algorithm.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static void SelectDiverseResults(
+        List<SearchResult> selectedResults, 
+        List<SearchResult> remainingResults, 
+        RetrievalOptions options)
+    {
         while (selectedResults.Count < options.TopK && remainingResults.Count > 0)
         {
-            float maxScore = float.MinValue;
-            int maxIndex = 0;
+            int bestIndex = FindBestMmrCandidate(selectedResults, remainingResults, options.DiversityLambda);
+            selectedResults.Add(remainingResults[bestIndex]);
+            remainingResults.RemoveAt(bestIndex);
+        }
+    }
 
-            for (int i = 0; i < remainingResults.Count; i++)
+    /// <summary>
+    /// Finds the candidate with highest MMR score.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static int FindBestMmrCandidate(
+        List<SearchResult> selectedResults, 
+        List<SearchResult> remainingResults, 
+        float diversityLambda)
+    {
+        float maxScore = float.MinValue;
+        int maxIndex = 0;
+
+        for (int i = 0; i < remainingResults.Count; i++)
+        {
+            float mmrScore = CalculateMmrScore(
+                remainingResults[i], 
+                selectedResults, 
+                diversityLambda);
+
+            if (mmrScore > maxScore)
             {
-                SearchResult candidate = remainingResults[i];
-                
-                // Calculate minimum similarity to already selected results
-                float maxSimilarityToSelected = selectedResults
-                    .Max(selected => CalculateCosineSimilarity(
-                        candidate.Chunk.Content, 
-                        selected.Chunk.Content));
-
-                // MMR score: lambda * relevance - (1 - lambda) * max_similarity
-                float mmrScore = options.DiversityLambda * candidate.RelevanceScore 
-                               - (1 - options.DiversityLambda) * maxSimilarityToSelected;
-
-                if (mmrScore > maxScore)
-                {
-                    maxScore = mmrScore;
-                    maxIndex = i;
-                }
+                maxScore = mmrScore;
+                maxIndex = i;
             }
-
-            selectedResults.Add(remainingResults[maxIndex]);
-            remainingResults.RemoveAt(maxIndex);
         }
 
-        // Rerank with final positions
+        return maxIndex;
+    }
+
+    /// <summary>
+    /// Calculates MMR score for a candidate result.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static float CalculateMmrScore(
+        SearchResult candidate, 
+        List<SearchResult> selectedResults, 
+        float diversityLambda)
+    {
+        float maxSimilarityToSelected = selectedResults
+            .Max(selected => CalculateCosineSimilarity(
+                candidate.Chunk.Content, 
+                selected.Chunk.Content));
+
+        return diversityLambda * candidate.RelevanceScore 
+             - (1 - diversityLambda) * maxSimilarityToSelected;
+    }
+
+    /// <summary>
+    /// Reranks selected results with final positions.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static List<SearchResult> RerankSelectedResults(List<SearchResult> selectedResults)
+    {
         return selectedResults
             .Select((r, index) => SearchResult.Create(r.Chunk, r.RelevanceScore, index + 1))
             .ToList();

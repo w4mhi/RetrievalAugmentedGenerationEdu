@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 using System.Diagnostics;
@@ -38,7 +39,7 @@ public sealed class RagEngine : IRagEngine
         this.retrievalOptions.Validate();
         
         this.logger?.LogInformation(
-            "RagEngine initialized with {RetrievalStrategy} retrieval strategy, TopK={TopK}, LLM={LlmEnabled}",
+            LogMessages.RagEngineInitialized,
             this.retrievalOptions.Strategy,
             this.retrievalOptions.TopK,
             this.languageModel != null ? "Enabled" : "Disabled");
@@ -48,19 +49,19 @@ public sealed class RagEngine : IRagEngine
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         
-        this.logger?.LogDebug("Processing query: {Query}", query);
+        this.logger?.LogDebug(LogMessages.ProcessingQuery, query);
         Stopwatch stopwatch = Stopwatch.StartNew();
 
         try
         {
             // Generate query embedding
-            this.logger?.LogDebug("Generating embedding for query");
+            this.logger?.LogDebug(LogMessages.GeneratingEmbedding);
             float[] queryEmbedding = await this.embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
-            this.logger?.LogDebug("Generated embedding with {Dimensions} dimensions", queryEmbedding.Length);
+            this.logger?.LogDebug(LogMessages.EmbeddingGenerated, queryEmbedding.Length);
 
             // Retrieve relevant chunks using configured retrieval strategy
             this.logger?.LogDebug(
-                "Searching vector store with {Strategy} strategy, TopK={TopK}",
+                LogMessages.SearchingVectorStore,
                 this.retrievalOptions.Strategy,
                 this.retrievalOptions.TopK);
             
@@ -70,7 +71,7 @@ public sealed class RagEngine : IRagEngine
                 cancellationToken);
 
             this.logger?.LogInformation(
-                "Retrieved {ResultCount} results for query in {ElapsedMs}ms",
+                LogMessages.RetrievedResults,
                 searchResults.Count,
                 stopwatch.ElapsedMilliseconds);
 
@@ -78,19 +79,19 @@ public sealed class RagEngine : IRagEngine
             string answer;
             if (this.languageModel != null)
             {
-                this.logger?.LogDebug("Generating answer using LLM");
+                this.logger?.LogDebug(LogMessages.GeneratingAnswerWithLlm);
                 answer = await this.GenerateAnswerWithLlmAsync(query, searchResults, cancellationToken);
             }
             else
             {
-                this.logger?.LogWarning("LLM not configured, using fallback retrieval mode");
+                this.logger?.LogWarning(LogMessages.LlmNotConfigured);
                 answer = GenerateAnswerFallback(query, searchResults);
             }
 
             stopwatch.Stop();
             
             this.logger?.LogInformation(
-                "Query processed successfully in {TotalSeconds}s",
+                LogMessages.QueryProcessedSuccessfully,
                 stopwatch.Elapsed.TotalSeconds);
 
             return RagResponse.Create(answer, searchResults, stopwatch.Elapsed, query);
@@ -100,7 +101,7 @@ public sealed class RagEngine : IRagEngine
             stopwatch.Stop();
             this.logger?.LogError(
                 ex,
-                "Failed to process query after {ElapsedMs}ms: {ErrorMessage}",
+                LogMessages.QueryProcessingFailed,
                 stopwatch.ElapsedMilliseconds,
                 ex.Message);
             throw;
@@ -113,36 +114,36 @@ public sealed class RagEngine : IRagEngine
 
         if (!Directory.Exists(directoryPath))
         {
-            this.logger?.LogError("Directory not found: {DirectoryPath}", directoryPath);
+            this.logger?.LogError(LogMessages.DirectoryNotFound, directoryPath);
             throw new DirectoryNotFoundException($"Directory not found: {directoryPath}");
         }
 
-        this.logger?.LogInformation("Starting document indexing from: {DirectoryPath}", directoryPath);
+        this.logger?.LogInformation(LogMessages.StartingDocumentIndexing, directoryPath);
         Stopwatch stopwatch = Stopwatch.StartNew();
 
         try
         {
             // Load documents
-            this.logger?.LogDebug("Loading documents from directory");
+            this.logger?.LogDebug(LogMessages.LoadingDocuments);
             IReadOnlyList<DocumentChunk> chunks = await this.documentLoader.LoadDocumentsAsync(directoryPath, cancellationToken);
 
             if (chunks.Count == 0)
             {
-                this.logger?.LogWarning("No documents found in directory: {DirectoryPath}", directoryPath);
+                this.logger?.LogWarning(LogMessages.NoDocumentsFound, directoryPath);
                 throw new InvalidOperationException("No documents found to index.");
             }
 
-            this.logger?.LogInformation("Loaded {ChunkCount} chunks from documents", chunks.Count);
+            this.logger?.LogInformation(LogMessages.LoadedChunks, chunks.Count);
 
             // Store chunks in vector store
-            this.logger?.LogDebug("Storing chunks in vector store");
+            this.logger?.LogDebug(LogMessages.StoringChunks);
             await this.vectorStore.StoreChunksAsync(chunks, cancellationToken);
 
             this.lastIndexed = DateTime.UtcNow;
             stopwatch.Stop();
 
             this.logger?.LogInformation(
-                "Successfully indexed {ChunkCount} chunks in {ElapsedSeconds}s",
+                LogMessages.IndexedSuccessfully,
                 chunks.Count,
                 stopwatch.Elapsed.TotalSeconds);
         }
@@ -151,7 +152,7 @@ public sealed class RagEngine : IRagEngine
             stopwatch.Stop();
             this.logger?.LogError(
                 ex,
-                "Failed to index documents after {ElapsedMs}ms: {ErrorMessage}",
+                LogMessages.IndexingFailed,
                 stopwatch.ElapsedMilliseconds,
                 ex.Message);
             throw;
@@ -162,14 +163,14 @@ public sealed class RagEngine : IRagEngine
     {
         try
         {
-            this.logger?.LogDebug("Retrieving index statistics");
+            this.logger?.LogDebug(LogMessages.RetrievingIndexStats);
             int count = await this.vectorStore.GetChunkCountAsync(cancellationToken);
-            this.logger?.LogDebug("Index contains {ChunkCount} chunks, last indexed: {LastIndexed}", count, this.lastIndexed);
+            this.logger?.LogDebug(LogMessages.IndexStatsRetrieved, count, this.lastIndexed);
             return (count, this.lastIndexed);
         }
         catch (Exception ex)
         {
-            this.logger?.LogError(ex, "Failed to retrieve index statistics: {ErrorMessage}", ex.Message);
+            this.logger?.LogError(ex, LogMessages.IndexStatsRetrievalFailed, ex.Message);
             throw;
         }
     }
@@ -185,53 +186,69 @@ public sealed class RagEngine : IRagEngine
     {
         if (searchResults.Count == 0)
         {
-            this.logger?.LogWarning("No search results available for LLM generation");
-            return "I couldn't find any relevant information in the documentation to answer your question.";
+            this.logger?.LogWarning(LogMessages.NoSearchResults);
+            return FallbackMessages.NoRelevantInformation;
         }
 
         try
         {
-            // Build context from retrieved chunks
-            System.Text.StringBuilder contextBuilder = new System.Text.StringBuilder();
-            contextBuilder.AppendLine("Use the following information from technical manuals to answer the user's question:");
-            contextBuilder.AppendLine();
-
-            for (int i = 0; i < searchResults.Count; i++)
-            {
-                SearchResult result = searchResults[i];
-                contextBuilder.AppendLine($"--- Source {i + 1} ---");
-                contextBuilder.AppendLine($"Document: {Path.GetFileName(result.Chunk.SourceFilePath)}");
-                contextBuilder.AppendLine($"Page: {result.Chunk.PageNumber}");
-                contextBuilder.AppendLine($"Section: {result.Chunk.SectionTitle}");
-                contextBuilder.AppendLine($"Relevance Score: {result.RelevanceScore:P1}");
-                contextBuilder.AppendLine();
-                contextBuilder.AppendLine(result.Chunk.Content);
-                contextBuilder.AppendLine();
-            }
-
-            contextBuilder.AppendLine("---");
-            contextBuilder.AppendLine();
-            contextBuilder.AppendLine($"User Question: {query}");
-            contextBuilder.AppendLine();
-            contextBuilder.AppendLine("Please provide a clear, accurate answer based on the information above. " +
-                                     "Cite specific sources (document name and page number) in your answer. " +
-                                     "If the provided information is insufficient, state that clearly.");
-
-            // Generate response using LLM
-            string prompt = contextBuilder.ToString();
-            this.logger?.LogDebug("Sending prompt to LLM with {ContextLength} characters", prompt.Length);
+            string prompt = BuildLlmPrompt(query, searchResults);
+            this.logger?.LogDebug(LogMessages.SendingPromptToLlm, prompt.Length);
             
             string answer = await this.languageModel!.GenerateAsync(prompt, cancellationToken);
             
-            this.logger?.LogDebug("LLM generated answer with {AnswerLength} characters", answer.Length);
+            this.logger?.LogDebug(LogMessages.LlmGeneratedAnswer, answer.Length);
             return answer;
         }
         catch (Exception ex)
         {
-            this.logger?.LogError(ex, "LLM generation failed: {ErrorMessage}", ex.Message);
-            this.logger?.LogWarning("Falling back to retrieval-only mode due to LLM error");
+            this.logger?.LogError(ex, LogMessages.LlmGenerationFailed, ex.Message);
+            this.logger?.LogWarning(LogMessages.FallingBackToRetrieval);
             return GenerateAnswerFallback(query, searchResults);
         }
+    }
+
+    /// <summary>
+    /// Builds LLM prompt from query and search results.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static string BuildLlmPrompt(string query, IReadOnlyList<SearchResult> searchResults)
+    {
+        System.Text.StringBuilder contextBuilder = new System.Text.StringBuilder();
+        contextBuilder.AppendLine("Use the following information from technical manuals to answer the user's question:");
+        contextBuilder.AppendLine();
+
+        for (int i = 0; i < searchResults.Count; i++)
+        {
+            AppendSearchResultContext(contextBuilder, searchResults[i], i + 1);
+        }
+
+        contextBuilder.AppendLine("---");
+        contextBuilder.AppendLine();
+        contextBuilder.AppendLine($"User Question: {query}");
+        contextBuilder.AppendLine();
+        contextBuilder.AppendLine(SystemPrompts.AnswerInstructions);
+
+        return contextBuilder.ToString();
+    }
+
+    /// <summary>
+    /// Appends a single search result to the context builder.
+    /// Reduces method complexity (Rule 16).
+    /// </summary>
+    private static void AppendSearchResultContext(
+        System.Text.StringBuilder contextBuilder, 
+        SearchResult result, 
+        int sourceNumber)
+    {
+        contextBuilder.AppendLine($"--- Source {sourceNumber} ---");
+        contextBuilder.AppendLine($"Document: {Path.GetFileName(result.Chunk.SourceFilePath)}");
+        contextBuilder.AppendLine($"Page: {result.Chunk.PageNumber}");
+        contextBuilder.AppendLine($"Section: {result.Chunk.SectionTitle}");
+        contextBuilder.AppendLine($"Relevance Score: {result.RelevanceScore:P1}");
+        contextBuilder.AppendLine();
+        contextBuilder.AppendLine(result.Chunk.Content);
+        contextBuilder.AppendLine();
     }
 
     /// <summary>
@@ -242,13 +259,13 @@ public sealed class RagEngine : IRagEngine
     {
         if (searchResults.Count == 0)
         {
-            return "I couldn't find any relevant information in the documentation.";
+            return FallbackMessages.NoRelevantInformationSimple;
         }
 
         // Simple retrieval without LLM generation
         string context = string.Join("\n\n", searchResults.Select(r => 
             $"[Source: {Path.GetFileName(r.Chunk.SourceFilePath)}, Page {r.Chunk.PageNumber}, Section: {r.Chunk.SectionTitle}]\n{r.Chunk.Content}"));
 
-        return $"Based on the documentation:\n\n{context}\n\n(Note: LLM not configured. Showing retrieved chunks only. Configure Phi-4 in appsettings.json for enhanced answers.)";
+        return $"Based on the documentation:\n\n{context}\n\n{FallbackMessages.ConfigurePhi4Note}";
     }
 }

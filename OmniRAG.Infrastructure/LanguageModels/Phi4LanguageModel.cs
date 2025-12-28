@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Onnx;
 using Polly;
+using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Infrastructure.Resilience;
 
@@ -49,7 +50,7 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
         this.logger = logger;
         this.ModelName = "Phi-4 Mini";
 
-        this.logger?.LogDebug("Initializing Phi-4 model from path: {ModelPath}, maxTokens: {MaxTokens}, temperature: {Temperature}", 
+        this.logger?.LogDebug(LogMessages.InitializingLanguageModel, 
             modelPath, maxTokens, temperature);
 
         try
@@ -68,16 +69,16 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
             // Initialize resilience policy for LLM operations (Timeout + Fallback)
             this.llmPolicy = ResiliencePolicies.CreateLanguageModelPipeline(
                 this.logger,
-                "[LLM unavailable] The language model is currently unavailable. Please try again later.",
+                FallbackMessages.LlmUnavailableRetryLater,
                 "Phi4Inference");
 
             IsInitialized = true;
             Console.WriteLine($"✓ Phi-4 model loaded from: {modelPath}");
-            this.logger?.LogInformation("Successfully loaded Phi-4 model from: {ModelPath}", modelPath);
+            this.logger?.LogInformation(LogMessages.LanguageModelLoaded, modelPath);
         }
         catch (Exception ex)
         {
-            this.logger?.LogError(ex, "Failed to initialize Phi-4 model from {ModelPath}: {ErrorMessage}", modelPath, ex.Message);
+            this.logger?.LogError(ex, LogMessages.LanguageModelInitializationFailed, modelPath, ex.Message);
             throw new InvalidOperationException(
                 $"Failed to initialize Phi-4 model from {modelPath}. " +
                 $"Ensure AI Toolkit has downloaded the model and ONNX runtime is available.",
@@ -103,7 +104,7 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
             throw new InvalidOperationException("Model is not initialized. Call Initialize() first.");
         }
 
-        this.logger?.LogDebug("Generating response for prompt of length {PromptLength}, maxTokens: {MaxTokens}, temperature: {Temperature}", 
+        this.logger?.LogDebug(LogMessages.GeneratingResponse, 
             prompt.Length, maxTokens, temperature);
 
         try
@@ -115,11 +116,7 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
                 ChatHistory chatHistory = new ChatHistory();
 
                 // System message for technical manual context
-                chatHistory.AddSystemMessage(
-                    "You are a helpful technical assistant specialized in answering questions about technical manuals and user guides. " +
-                    "Provide accurate, concise answers based on the provided context. " +
-                    "If the context doesn''t contain enough information, say so clearly. " +
-                    "Always cite the source (document and page number) when possible.");
+                chatHistory.AddSystemMessage(SystemPrompts.TechnicalAssistant);
 
                 chatHistory.AddUserMessage(prompt);
 
@@ -128,7 +125,7 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
                 {
                     MaxTokens = maxTokens,
                     Temperature = temperature,
-                    TopP = 0.9f
+                    TopP = DefaultValues.DefaultTopP
                 };
 
                 // Generate response
@@ -141,17 +138,17 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
                 return response.Content ?? string.Empty;
             });
 
-            this.logger?.LogDebug("Successfully generated response of length: {ResponseLength}", result.Length);
+            this.logger?.LogDebug(LogMessages.ResponseGenerated, result.Length);
             return result;
         }
         catch (OperationCanceledException)
         {
-            this.logger?.LogWarning("Response generation was cancelled");
+            this.logger?.LogWarning(LogMessages.ResponseGenerationCancelled);
             throw;
         }
         catch (Exception ex)
         {
-            this.logger?.LogError(ex, "Failed to generate response from Phi-4 model: {ErrorMessage}", ex.Message);
+            this.logger?.LogError(ex, LogMessages.ResponseGenerationFailed, ex.Message);
             throw new InvalidOperationException(
                 $"Failed to generate response from Phi-4 model: {ex.Message}",
                 ex);

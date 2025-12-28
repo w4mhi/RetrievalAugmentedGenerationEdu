@@ -4,6 +4,7 @@ using Polly.CircuitBreaker;
 using Polly.Retry;
 using Polly.Timeout;
 using Python.Runtime;
+using OmniRAG.Core.Constants;
 
 namespace OmniRAG.Infrastructure.Resilience;
 
@@ -29,10 +30,10 @@ public static class ResiliencePolicies
     public static IAsyncPolicy<TResult> CreatePythonNetPipeline<TResult>(
         ILogger? logger = null,
         string operationName = "PythonNet",
-        int retryCount = 3,
-        int timeoutSeconds = 30,
-        int circuitBreakerFailures = 3,
-        int circuitBreakerDurationSeconds = 60)
+        int retryCount = DefaultValues.DefaultRetryCount,
+        int timeoutSeconds = DefaultValues.DefaultTimeoutSeconds,
+        int circuitBreakerFailures = DefaultValues.DefaultCircuitBreakerFailures,
+        int circuitBreakerDurationSeconds = DefaultValues.DefaultCircuitBreakerDurationSeconds)
     {
         AsyncCircuitBreakerPolicy circuitBreaker = Policy
             .Handle<PythonException>()
@@ -44,18 +45,18 @@ public static class ResiliencePolicies
                 onBreak: (exception, duration) =>
                 {
                     logger?.LogError(exception,
-                        "{OperationName}: Circuit breaker opened for {DurationSeconds}s due to {ExceptionType}",
+                        LogMessages.CircuitBreakerOpened,
                         operationName,
                         duration.TotalSeconds,
                         exception.GetType().Name);
                 },
                 onReset: () =>
                 {
-                    logger?.LogInformation("{OperationName}: Circuit breaker reset, operations resuming", operationName);
+                    logger?.LogInformation(LogMessages.CircuitBreakerReset, operationName);
                 },
                 onHalfOpen: () =>
                 {
-                    logger?.LogInformation("{OperationName}: Circuit breaker half-open, testing recovery", operationName);
+                    logger?.LogInformation(LogMessages.CircuitBreakerHalfOpen, operationName);
                 });
 
         AsyncRetryPolicy retryPolicy = Policy
@@ -68,7 +69,7 @@ public static class ResiliencePolicies
                 onRetry: (exception, timespan, currentRetry, context) =>
                 {
                     logger?.LogWarning(exception,
-                        "{OperationName}: Retry {RetryCount}/{MaxRetries} after {DelaySeconds}s: {ErrorMessage}",
+                        LogMessages.RetryAttempt,
                         operationName,
                         currentRetry,
                         retryCount,
@@ -82,7 +83,7 @@ public static class ResiliencePolicies
             onTimeoutAsync: (context, timespan, task) =>
             {
                 logger?.LogWarning(
-                    "{OperationName}: Operation timed out after {TimeoutSeconds}s",
+                    LogMessages.OperationTimedOut,
                     operationName,
                     timespan.TotalSeconds);
                 return Task.CompletedTask;
@@ -107,7 +108,7 @@ public static class ResiliencePolicies
         ILogger? logger = null,
         string? fallbackValue = null,
         string operationName = "LanguageModel",
-        int timeoutSeconds = 60)
+        int timeoutSeconds = DefaultValues.LanguageModelTimeoutSeconds)
     {
         AsyncTimeoutPolicy timeoutPolicy = Policy.TimeoutAsync(
             TimeSpan.FromSeconds(timeoutSeconds),
@@ -115,7 +116,7 @@ public static class ResiliencePolicies
             onTimeoutAsync: (context, timespan, task) =>
             {
                 logger?.LogWarning(
-                    "{OperationName}: LLM inference timed out after {TimeoutSeconds}s",
+                    LogMessages.LlmInferenceTimedOut,
                     operationName,
                     timespan.TotalSeconds);
                 return Task.CompletedTask;
@@ -124,11 +125,11 @@ public static class ResiliencePolicies
         IAsyncPolicy<string> fallbackPolicy = Policy<string>
             .Handle<Exception>()
             .FallbackAsync(
-                fallbackValue: fallbackValue ?? "[LLM unavailable] Unable to generate response.",
+                fallbackValue: fallbackValue ?? FallbackMessages.LlmUnavailable,
                 onFallbackAsync: (exception, context) =>
                 {
                     logger?.LogWarning(exception.Exception,
-                        "{OperationName}: LLM operation failed, using fallback: {ErrorMessage}",
+                        LogMessages.LlmOperationFailed,
                         operationName,
                         exception.Exception.Message);
                     return Task.CompletedTask;
@@ -153,9 +154,9 @@ public static class ResiliencePolicies
     public static IAsyncPolicy<TResult> CreateVectorStorePipeline<TResult>(
         ILogger? logger = null,
         string operationName = "VectorStore",
-        int retryCount = 5,
-        int circuitBreakerFailures = 5,
-        int circuitBreakerDurationSeconds = 120)
+        int retryCount = DefaultValues.VectorStoreRetryCount,
+        int circuitBreakerFailures = DefaultValues.VectorStoreCircuitBreakerFailures,
+        int circuitBreakerDurationSeconds = DefaultValues.VectorStoreCircuitBreakerDurationSeconds)
     {
         AsyncCircuitBreakerPolicy circuitBreaker = Policy
             .Handle<IOException>()
@@ -167,13 +168,13 @@ public static class ResiliencePolicies
                 onBreak: (exception, duration) =>
                 {
                     logger?.LogError(exception,
-                        "{OperationName}: Vector store circuit breaker opened for {DurationSeconds}s (possible disk/DB issues)",
+                        LogMessages.VectorStoreCircuitBreakerOpened,
                         operationName,
                         duration.TotalSeconds);
                 },
                 onReset: () =>
                 {
-                    logger?.LogInformation("{OperationName}: Vector store circuit breaker reset", operationName);
+                    logger?.LogInformation(LogMessages.VectorStoreCircuitBreakerReset, operationName);
                 });
 
         AsyncRetryPolicy retryPolicy = Policy
@@ -186,7 +187,7 @@ public static class ResiliencePolicies
                 onRetry: (exception, timespan, currentRetry, context) =>
                 {
                     logger?.LogWarning(exception,
-                        "{OperationName}: Vector store retry {RetryCount}/{MaxRetries} after {DelayMs}ms: {ErrorMessage}",
+                        LogMessages.VectorStoreRetry,
                         operationName,
                         currentRetry,
                         retryCount,
@@ -221,7 +222,7 @@ public static class ResiliencePolicies
                 {
                     string? filePath = context.TryGetValue("FilePath", out object? value) ? value as string : "unknown";
                     logger?.LogWarning(exception.Exception,
-                        "{OperationName}: Failed to process file {FilePath}, skipping: {ErrorMessage}",
+                        LogMessages.DocumentLoadingFailed,
                         operationName,
                         filePath,
                         exception.Exception.Message);
