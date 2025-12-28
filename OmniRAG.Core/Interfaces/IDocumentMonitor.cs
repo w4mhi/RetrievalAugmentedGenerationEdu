@@ -1,6 +1,10 @@
-namespace OmniRAG.Core.Interfaces;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 using OmniRAG.Core.Models;
+
+namespace OmniRAG.Core.Interfaces;
 
 /// <summary>
 /// Monitors a directory for document changes and triggers automatic indexing.

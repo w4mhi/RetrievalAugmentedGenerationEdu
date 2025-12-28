@@ -1,6 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 using FluentAssertions;
+
 using Microsoft.Extensions.Logging;
+
 using Moq;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 using OmniRAG.Core.Services;
@@ -26,6 +36,7 @@ public class RagEngineTests
         this.mockVectorStore = new Mock<IVectorStore>();
         this.mockLogger = new Mock<ILogger<RagEngine>>();
         this.ragEngine = new RagEngine(
+            null,
             this.mockDocumentLoader.Object,
             this.mockEmbeddingService.Object,
             this.mockVectorStore.Object,
@@ -36,7 +47,7 @@ public class RagEngineTests
     public void Constructor_WithNullDocumentLoader_ShouldThrowArgumentNullException()
     {
         // Act
-        Action act = () => new RagEngine(null!, this.mockEmbeddingService.Object, this.mockVectorStore.Object);
+        Action act = () => new RagEngine(null, null!, this.mockEmbeddingService.Object, this.mockVectorStore.Object);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()

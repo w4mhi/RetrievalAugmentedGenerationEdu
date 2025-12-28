@@ -1,5 +1,9 @@
+using System;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+
+using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 
 namespace OmniRAG.Infrastructure.LanguageModels;
@@ -57,8 +61,8 @@ public static class LanguageModelFactory
         // Expand environment variables
         modelPath = Environment.ExpandEnvironmentVariables(modelPath);
 
-        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:Phi4:MaxTokens"], out int mt) ? mt : 2048;
-        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:Phi4:Temperature"], out float temp) ? temp : 0.7f;
+        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:Phi4:MaxTokens"], out int mt) ? mt : DefaultValues.DefaultMaxTokens;
+        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:Phi4:Temperature"], out float temp) ? temp : DefaultValues.DefaultTemperature;
 
         ILogger<Phi4LanguageModel>? logger = loggerFactory?.CreateLogger<Phi4LanguageModel>();
         
@@ -76,8 +80,8 @@ public static class LanguageModelFactory
         }
 
         string modelName = configuration["OmniRAG:LanguageModel:Mistral:ModelName"] ?? "mistral-small";
-        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:Mistral:MaxTokens"], out int mt) ? mt : 2048;
-        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:Mistral:Temperature"], out float temp) ? temp : 0.7f;
+        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:Mistral:MaxTokens"], out int mt) ? mt : DefaultValues.DefaultMaxTokens;
+        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:Mistral:Temperature"], out float temp) ? temp : DefaultValues.DefaultTemperature;
 
         ILogger<MistralLanguageModel>? logger = loggerFactory?.CreateLogger<MistralLanguageModel>();
         
@@ -96,8 +100,8 @@ public static class LanguageModelFactory
 
         string modelName = configuration["OmniRAG:LanguageModel:GPT:ModelName"] ?? "gpt-4-turbo";
         string? organizationId = configuration["OmniRAG:LanguageModel:GPT:OrganizationId"];
-        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:GPT:MaxTokens"], out int mt) ? mt : 2048;
-        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:GPT:Temperature"], out float temp) ? temp : 0.7f;
+        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:GPT:MaxTokens"], out int mt) ? mt : DefaultValues.DefaultMaxTokens;
+        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:GPT:Temperature"], out float temp) ? temp : DefaultValues.DefaultTemperature;
 
         ILogger<GptLanguageModel>? logger = loggerFactory?.CreateLogger<GptLanguageModel>();
         
@@ -118,8 +122,8 @@ public static class LanguageModelFactory
         modelPath = Environment.ExpandEnvironmentVariables(modelPath);
 
         string modelVariant = configuration["OmniRAG:LanguageModel:Llama:ModelVariant"] ?? "Llama-3-8B";
-        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:Llama:MaxTokens"], out int mt) ? mt : 2048;
-        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:Llama:Temperature"], out float temp) ? temp : 0.7f;
+        int maxTokens = int.TryParse(configuration["OmniRAG:LanguageModel:Llama:MaxTokens"], out int mt) ? mt : DefaultValues.DefaultMaxTokens;
+        float temperature = float.TryParse(configuration["OmniRAG:LanguageModel:Llama:Temperature"], out float temp) ? temp : DefaultValues.DefaultTemperature;
 
         ILogger<LlamaLanguageModel>? logger = loggerFactory?.CreateLogger<LlamaLanguageModel>();
         

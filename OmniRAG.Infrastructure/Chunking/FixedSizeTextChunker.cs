@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 using Microsoft.Extensions.Logging;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 
@@ -54,48 +59,8 @@ public sealed class FixedSizeTextChunker : ITextChunker
         try
         {
             string currentSectionTitle = headings.FirstOrDefault() ?? "Introduction";
-            string[] words = text.Split([' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries);
-        
-        List<string> currentChunk = new List<string>();
-        int startIndex = 0;
-
-        for (int i = 0; i < words.Length; i++)
-        {
-            currentChunk.Add(words[i]);
-
-            // Estimate tokens (1 word ≈ 1.3 tokens on average)
-            int estimatedTokens = (int)(currentChunk.Count * 1.3);
-
-            // Update section title if we encounter a heading
-            string chunkText = string.Join(" ", currentChunk);
-            string? matchingHeading = headings.FirstOrDefault(h => 
-                chunkText.Contains(h, StringComparison.OrdinalIgnoreCase));
-            if (matchingHeading != null)
-            {
-                currentSectionTitle = matchingHeading;
-            }
-
-            // Create chunk when target size is reached
-            if (estimatedTokens >= chunkSize || i == words.Length - 1)
-            {
-                string content = string.Join(" ", currentChunk);
-                chunks.Add(new TextChunk(
-                    content,
-                    pageNumber,
-                    currentSectionTitle,
-                    startIndex,
-                    startIndex + content.Length));
-
-                // Prepare next chunk with overlap
-                if (i < words.Length - 1)
-                {
-                    startIndex += content.Length;
-                    int overlapWords = (int)(this.overlapSize / 1.3);
-                    int keepWords = Math.Min(overlapWords, currentChunk.Count);
-                    currentChunk = currentChunk.Skip(currentChunk.Count - keepWords).ToList();
-                }
-            }
-        }
+            string[] words = SplitIntoWords(text);
+            chunks = BuildChunksFromWords(words, pageNumber, headings, currentSectionTitle);
 
             this.logger?.LogDebug(
                 "Created {ChunkCount} chunks for page {PageNumber}",
@@ -113,5 +78,74 @@ public sealed class FixedSizeTextChunker : ITextChunker
                 ex.Message);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Splits text into words array.
+    /// Reduces method complexity (Rule 8).
+    /// </summary>
+    private static string[] SplitIntoWords(string text)
+    {
+        return text.Split([' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    /// <summary>
+    /// Builds chunks from words array with overlap.
+    /// Reduces method complexity (Rule 8).
+    /// </summary>
+    private List<TextChunk> BuildChunksFromWords(
+        string[] words,
+        int pageNumber,
+        IReadOnlyList<string> headings,
+        string currentSectionTitle)
+    {
+        List<TextChunk> chunks = new List<TextChunk>();
+        List<string> currentChunk = new List<string>();
+        int startIndex = 0;
+
+        for (int i = 0; i < words.Length; i++)
+        {
+            currentChunk.Add(words[i]);
+            int estimatedTokens = (int)(currentChunk.Count * 1.3);
+            string chunkText = string.Join(" ", currentChunk);
+            currentSectionTitle = UpdateSectionTitle(chunkText, headings, currentSectionTitle);
+
+            if (estimatedTokens >= this.chunkSize || i == words.Length - 1)
+            {
+                chunks.Add(CreateChunk(chunkText, pageNumber, currentSectionTitle, startIndex));
+
+                if (i < words.Length - 1)
+                {
+                    startIndex += chunkText.Length;
+                    currentChunk = GetOverlapWords(currentChunk);
+                }
+            }
+        }
+
+        return chunks;
+    }
+
+    private static string UpdateSectionTitle(string chunkText, IReadOnlyList<string> headings, string currentSectionTitle)
+    {
+        string? matchingHeading = headings.FirstOrDefault(h => 
+            chunkText.Contains(h, StringComparison.OrdinalIgnoreCase));
+        return matchingHeading ?? currentSectionTitle;
+    }
+
+    private static TextChunk CreateChunk(string content, int pageNumber, string sectionTitle, int startIndex)
+    {
+        return new TextChunk(
+            content,
+            pageNumber,
+            sectionTitle,
+            startIndex,
+            startIndex + content.Length);
+    }
+
+    private List<string> GetOverlapWords(List<string> currentChunk)
+    {
+        int overlapWords = (int)(this.overlapSize / 1.3);
+        int keepWords = Math.Min(overlapWords, currentChunk.Count);
+        return currentChunk.Skip(currentChunk.Count - keepWords).ToList();
     }
 }

@@ -1,5 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
 using Polly;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 using OmniRAG.Infrastructure.PdfProcessing;
@@ -25,7 +34,7 @@ public sealed class PdfDocumentLoader : IDocumentLoader
         this.embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
         this.chunker = chunker ?? throw new ArgumentNullException(nameof(chunker));
         this.logger = logger;
-        pdfExtractor = new PdfTextExtractor();
+        this.pdfExtractor = new PdfTextExtractor();
         
         // Initialize resilience policy for per-file error handling (Fallback)
         this.documentLoaderPolicy = ResiliencePolicies.CreateDocumentLoaderPipeline<IReadOnlyList<DocumentChunk>>(
@@ -83,7 +92,7 @@ public sealed class PdfDocumentLoader : IDocumentLoader
             Console.WriteLine($"Processing: {Path.GetFileName(filePath)}");
 
             // Extract text from PDF
-            IReadOnlyList<ExtractedPage> pages = pdfExtractor.ExtractPages(filePath);
+            IReadOnlyList<ExtractedPage> pages = this.pdfExtractor.ExtractPages(filePath);
             this.logger?.LogDebug("Extracted {PageCount} pages from {FileName}", pages.Count, Path.GetFileName(filePath));
             
             List<DocumentChunk> documentChunks = new List<DocumentChunk>();
@@ -92,11 +101,11 @@ public sealed class PdfDocumentLoader : IDocumentLoader
             foreach (ExtractedPage page in pages)
             {
                 // Chunk the page text
-                IReadOnlyList<TextChunk> textChunks = chunker.ChunkText(page.Text, page.PageNumber, page.Headings);
+                IReadOnlyList<TextChunk> textChunks = this.chunker.ChunkText(page.Text, page.PageNumber, page.Headings);
 
                 // Generate embeddings for chunks
                 List<string> chunkTexts = textChunks.Select(c => c.Content).ToList();
-                IReadOnlyList<float[]> embeddings = await embeddingService.GenerateEmbeddingsAsync(chunkTexts, cancellationToken);
+                IReadOnlyList<float[]> embeddings = await this.embeddingService.GenerateEmbeddingsAsync(chunkTexts, cancellationToken);
 
                 // Create DocumentChunk objects
                 for (int i = 0; i < textChunks.Count; i++)

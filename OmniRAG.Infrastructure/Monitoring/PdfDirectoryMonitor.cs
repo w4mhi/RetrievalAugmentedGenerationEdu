@@ -1,4 +1,10 @@
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 
@@ -80,10 +86,10 @@ public class PdfDirectoryMonitor : IDocumentMonitor
             };
 
             // Subscribe to events
-            this.watcher.Created += OnFileCreated;
-            this.watcher.Changed += OnFileChanged;
-            this.watcher.Deleted += OnFileDeleted;
-            this.watcher.Error += OnError;
+            this.watcher.Created += this.OnFileCreated;
+            this.watcher.Changed += this.OnFileChanged;
+            this.watcher.Deleted += this.OnFileDeleted;
+            this.watcher.Error += this.OnError;
 
             this.isRunning = true;
             this.logger?.LogInformation("Started monitoring PDF directory: {Path}", this.directoryPath);
@@ -106,10 +112,10 @@ public class PdfDirectoryMonitor : IDocumentMonitor
                 this.watcher.EnableRaisingEvents = false;
                 
                 // Unsubscribe from events
-                this.watcher.Created -= OnFileCreated;
-                this.watcher.Changed -= OnFileChanged;
-                this.watcher.Deleted -= OnFileDeleted;
-                this.watcher.Error -= OnError;
+                this.watcher.Created -= this.OnFileCreated;
+                this.watcher.Changed -= this.OnFileChanged;
+                this.watcher.Deleted -= this.OnFileDeleted;
+                this.watcher.Error -= this.OnError;
                 
                 this.watcher.Dispose();
                 this.watcher = null;
@@ -125,19 +131,19 @@ public class PdfDirectoryMonitor : IDocumentMonitor
     private void OnFileCreated(object sender, FileSystemEventArgs e)
     {
         this.logger?.LogDebug("PDF file created: {FilePath}", e.Name);
-        RaiseDocumentChanged(e.FullPath, FileChangeType.Added);
+        this.RaiseDocumentChanged(e.FullPath, FileChangeType.Added);
     }
 
     private void OnFileChanged(object sender, FileSystemEventArgs e)
     {
         this.logger?.LogDebug("PDF file modified: {FilePath}", e.Name);
-        RaiseDocumentChanged(e.FullPath, FileChangeType.Modified);
+        this.RaiseDocumentChanged(e.FullPath, FileChangeType.Modified);
     }
 
     private void OnFileDeleted(object sender, FileSystemEventArgs e)
     {
         this.logger?.LogDebug("PDF file deleted: {FilePath}", e.Name);
-        RaiseDocumentChanged(e.FullPath, FileChangeType.Deleted);
+        this.RaiseDocumentChanged(e.FullPath, FileChangeType.Deleted);
     }
 
     private void OnError(object sender, ErrorEventArgs e)
@@ -161,6 +167,6 @@ public class PdfDirectoryMonitor : IDocumentMonitor
 
     public void Dispose()
     {
-        StopAsync().GetAwaiter().GetResult();
+        this.StopAsync().GetAwaiter().GetResult();
     }
 }

@@ -1,11 +1,19 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
 using Polly;
+
 using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 using OmniRAG.Infrastructure.Resilience;
+
 using Python.Runtime;
-using System.Text.Json;
 
 namespace OmniRAG.Infrastructure.VectorStores;
 
@@ -128,7 +136,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
                             metadatas.Append(metadata.ToPython());
                         }
 
-                        collection.add(
+                        this.collection.add(
                             ids: ids,
                             embeddings: embeddings,
                             documents: documents,
@@ -193,11 +201,11 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
                             _ => options.TopK
                         };
 
-                        dynamic results = collection.query(
+                        dynamic results = this.collection.query(
                             query_embeddings: new PyList(new[] { queryEmbeddingList }),
                             n_results: retrievalCount);
 
-                        IReadOnlyList<SearchResult> searchResults = ApplyRetrievalStrategy(results, options);
+                        IReadOnlyList<SearchResult> searchResults = ChromaVectorStore.ApplyRetrievalStrategy(results, options);
                     this.logger?.LogDebug(LogMessages.SearchCompleted, searchResults.Count);
                         return searchResults;
                     }
@@ -217,7 +225,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
         {
             using (Py.GIL())
             {
-                collection.delete();
+                this.collection.delete();
             }
         }, cancellationToken);
 
@@ -230,7 +238,7 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
         {
             using (Py.GIL())
             {
-                return (int)collection.count();
+                return (int)this.collection.count();
             }
         }, cancellationToken);
     }
@@ -372,7 +380,6 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
 
         selectedResults.Add(remainingResults[0]);
         remainingResults.RemoveAt(0);
-
         SelectDiverseResults(selectedResults, remainingResults, options);
 
         return RerankSelectedResults(selectedResults);
@@ -495,9 +502,9 @@ public sealed class ChromaVectorStore : IVectorStore, IDisposable
 
     public void Dispose()
     {
-        if (disposed) return;
+        if (this.disposed) return;
 
-        PythonEngine.EndAllowThreads(threadState);
-        disposed = true;
+        PythonEngine.EndAllowThreads(this.threadState);
+        this.disposed = true;
     }
 }

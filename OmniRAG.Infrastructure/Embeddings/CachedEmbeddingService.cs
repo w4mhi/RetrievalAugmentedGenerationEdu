@@ -1,7 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+
 using OmniRAG.Core.Interfaces;
 
 namespace OmniRAG.Infrastructure.Embeddings;
@@ -16,7 +23,7 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
 {
     private readonly IEmbeddingService innerService;
     private readonly IMemoryCache cache;
-    private readonly ILogger<CachedEmbeddingService> logger;
+    private readonly ILogger<CachedEmbeddingService>? logger;
     private readonly TimeSpan cacheExpiration;
     private bool disposed;
 
@@ -25,17 +32,17 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
     /// </summary>
     /// <param name="innerService">The underlying embedding service to cache.</param>
     /// <param name="cache">The memory cache instance.</param>
-    /// <param name="logger">Logger for diagnostics.</param>
     /// <param name="cacheExpiration">How long to cache embeddings (default: 24 hours).</param>
+    /// <param name="logger">Logger for diagnostics.</param>
     public CachedEmbeddingService(
         IEmbeddingService innerService,
         IMemoryCache cache,
-        ILogger<CachedEmbeddingService> logger,
-        TimeSpan? cacheExpiration = null)
+        TimeSpan? cacheExpiration = null,
+        ILogger<CachedEmbeddingService>? logger = null)
     {
         this.innerService = innerService ?? throw new ArgumentNullException(nameof(innerService));
         this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.logger = logger;
         this.cacheExpiration = cacheExpiration ?? TimeSpan.FromHours(24);
     }
 
@@ -54,7 +61,7 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
         // Try to get from cache
         if (this.cache.TryGetValue<float[]>(cacheKey, out float[]? cachedEmbedding) && cachedEmbedding != null)
         {
-            this.logger.LogDebug(
+            this.logger?.LogDebug(
                 "Cache hit for text: {TextPrefix}... (length: {Length})",
                 this.TruncateForLogging(text),
                 text.Length);
@@ -63,7 +70,7 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
         }
 
         // Cache miss - generate embedding
-        this.logger.LogDebug(
+        this.logger?.LogDebug(
             "Cache miss for text: {TextPrefix}... (length: {Length})",
             this.TruncateForLogging(text),
             text.Length);
@@ -80,7 +87,7 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
 
         this.cache.Set(cacheKey, embedding, cacheEntryOptions);
 
-        this.logger.LogInformation(
+        this.logger?.LogInformation(
             "Cached embedding for text: {TextPrefix}... (dimension: {Dimension}, cache duration: {Duration})",
             this.TruncateForLogging(text),
             embedding.Length,
@@ -120,7 +127,7 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
             if (this.cache.TryGetValue<float[]>(cacheKey, out float[]? cachedEmbedding) && cachedEmbedding != null)
             {
                 results.Add(cachedEmbedding);
-                this.logger.LogDebug("Batch cache hit for text at index {Index}", i);
+                this.logger?.LogDebug("Batch cache hit for text at index {Index}", i);
             }
             else
             {
@@ -134,7 +141,7 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
         // Generate embeddings for uncached texts
         if (uncachedTexts.Count > 0)
         {
-            this.logger.LogInformation(
+            this.logger?.LogInformation(
                 "Batch processing: {CachedCount} cached, {UncachedCount} uncached",
                 textList.Count - uncachedTexts.Count,
                 uncachedTexts.Count);
@@ -167,7 +174,7 @@ public class CachedEmbeddingService : IEmbeddingService, IDisposable
         }
         else
         {
-            this.logger.LogInformation("Batch processing: All {Count} embeddings served from cache", textList.Count);
+            this.logger?.LogInformation("Batch processing: All {Count} embeddings served from cache", textList.Count);
         }
 
         return results;

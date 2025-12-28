@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace OmniRAG.Infrastructure.PdfProcessing;
 
 /// <summary>

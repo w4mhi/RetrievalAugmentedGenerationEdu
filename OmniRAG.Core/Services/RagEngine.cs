@@ -1,8 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
 using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
-using System.Diagnostics;
 
 namespace OmniRAG.Core.Services;
 
@@ -22,18 +30,18 @@ public sealed class RagEngine : IRagEngine
     private DateTime? lastIndexed;
 
     public RagEngine(
+        RetrievalOptions? retrievalOptions,
         IDocumentLoader documentLoader,
         IEmbeddingService embeddingService,
         IVectorStore vectorStore,
         ILanguageModel? languageModel = null,
-        RetrievalOptions? retrievalOptions = null,
         ILogger<RagEngine>? logger = null)
     {
+        this.retrievalOptions = retrievalOptions ?? RetrievalOptions.Create(RetrievalStrategy.TopK);
         this.documentLoader = documentLoader ?? throw new ArgumentNullException(nameof(documentLoader));
         this.embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
         this.vectorStore = vectorStore ?? throw new ArgumentNullException(nameof(vectorStore));
         this.languageModel = languageModel; // Optional: allows running without LLM for testing
-        this.retrievalOptions = retrievalOptions ?? RetrievalOptions.Create(RetrievalStrategy.TopK);
         this.logger = logger;
         
         this.retrievalOptions.Validate();
@@ -263,8 +271,12 @@ public sealed class RagEngine : IRagEngine
         }
 
         // Simple retrieval without LLM generation
-        string context = string.Join("\n\n", searchResults.Select(r => 
-            $"[Source: {Path.GetFileName(r.Chunk.SourceFilePath)}, Page {r.Chunk.PageNumber}, Section: {r.Chunk.SectionTitle}]\n{r.Chunk.Content}"));
+        string context = string.Join(
+            "\n\n", 
+            searchResults.Select(r => 
+                $"[Source: {Path.GetFileName(r.Chunk.SourceFilePath)}, " +
+                $"Page {r.Chunk.PageNumber}, Section: {r.Chunk.SectionTitle}]\n" +
+                $"{r.Chunk.Content}"));
 
         return $"Based on the documentation:\n\n{context}\n\n{FallbackMessages.ConfigurePhi4Note}";
     }

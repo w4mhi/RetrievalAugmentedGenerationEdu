@@ -1,7 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
+
 using Spectre.Console;
 
 namespace OmniRAG.Console;
@@ -21,14 +30,14 @@ public sealed class OmniRAGApp : IDisposable
     private bool monitoringEnabled;
 
     public OmniRAGApp(
-        IRagEngine ragEngine, 
         IConfiguration configuration,
+        IRagEngine ragEngine,
         IDocumentMonitor? documentMonitor = null,
         IDocumentRepository? documentRepository = null,
         ILogger<OmniRAGApp>? logger = null)
     {
-        this.ragEngine = ragEngine ?? throw new ArgumentNullException(nameof(ragEngine));
         this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        this.ragEngine = ragEngine ?? throw new ArgumentNullException(nameof(ragEngine));
         this.documentMonitor = documentMonitor;
         this.documentRepository = documentRepository;
         this.logger = logger;
@@ -79,7 +88,7 @@ public sealed class OmniRAGApp : IDisposable
         }
 
         // Subscribe to document changes
-        this.documentMonitor.DocumentChanged += OnDocumentChanged;
+        this.documentMonitor.DocumentChanged += this.OnDocumentChanged;
 
         // Start monitoring
         await this.documentMonitor.StartAsync();
@@ -92,7 +101,7 @@ public sealed class OmniRAGApp : IDisposable
     {
         if (this.documentMonitor != null && this.monitoringEnabled)
         {
-            this.documentMonitor.DocumentChanged -= OnDocumentChanged;
+            this.documentMonitor.DocumentChanged -= this.OnDocumentChanged;
             await this.documentMonitor.StopAsync();
             this.monitoringEnabled = false;
         }
@@ -100,36 +109,58 @@ public sealed class OmniRAGApp : IDisposable
 
     private void OnDocumentChanged(object? sender, DocumentChangedEventArgs e)
     {
-        // Handle document changes asynchronously
         Task.Run(async () =>
         {
             try
             {
-                switch (e.ChangeType)
-                {
-                    case FileChangeType.Added:
-                        AnsiConsole.MarkupLine($"\n[yellow]📄 New PDF detected:[/] [cyan]{Path.GetFileName(e.FilePath)}[/]");
-                        await IndexSingleDocumentAsync(e.FilePath);
-                        AnsiConsole.MarkupLine("[green]✓ Document indexed automatically[/]\n");
-                        break;
-
-                    case FileChangeType.Modified:
-                        AnsiConsole.MarkupLine($"\n[yellow]📝 PDF modified:[/] [cyan]{Path.GetFileName(e.FilePath)}[/]");
-                        await IndexSingleDocumentAsync(e.FilePath);
-                        AnsiConsole.MarkupLine("[green]✓ Document re-indexed automatically[/]\n");
-                        break;
-
-                    case FileChangeType.Deleted:
-                        AnsiConsole.MarkupLine($"\n[red]🗑 PDF deleted:[/] [cyan]{Path.GetFileName(e.FilePath)}[/]");
-                        // Note: Deletion handling could be added to IRagEngine if needed
-                        break;
-                }
+                await this.HandleDocumentChangeAsync(e);
             }
             catch (Exception ex)
             {
                 AnsiConsole.MarkupLine($"[red]Error auto-indexing document: {ex.Message}[/]");
             }
         });
+    }
+
+    /// <summary>
+    /// Handles document change events.
+    /// Reduces method complexity (Rule 8).
+    /// </summary>
+    private async Task HandleDocumentChangeAsync(DocumentChangedEventArgs e)
+    {
+        switch (e.ChangeType)
+        {
+            case FileChangeType.Added:
+                await this.HandleDocumentAddedAsync(e.FilePath);
+                break;
+
+            case FileChangeType.Modified:
+                await this.HandleDocumentModifiedAsync(e.FilePath);
+                break;
+
+            case FileChangeType.Deleted:
+                HandleDocumentDeleted(e.FilePath);
+                break;
+        }
+    }
+
+    private async Task HandleDocumentAddedAsync(string filePath)
+    {
+        AnsiConsole.MarkupLine($"\n[yellow]📄 New PDF detected:[/] [cyan]{Path.GetFileName(filePath)}[/]");
+        await this.IndexSingleDocumentAsync(filePath);
+        AnsiConsole.MarkupLine("[green]✓ Document indexed automatically[/]\n");
+    }
+
+    private async Task HandleDocumentModifiedAsync(string filePath)
+    {
+        AnsiConsole.MarkupLine($"\n[yellow]📝 PDF modified:[/] [cyan]{Path.GetFileName(filePath)}[/]");
+        await this.IndexSingleDocumentAsync(filePath);
+        AnsiConsole.MarkupLine("[green]✓ Document re-indexed automatically[/]\n");
+    }
+
+    private static void HandleDocumentDeleted(string filePath)
+    {
+        AnsiConsole.MarkupLine($"\n[red]🗑 PDF deleted:[/] [cyan]{Path.GetFileName(filePath)}[/]");
     }
 
     private async Task IndexSingleDocumentAsync(string filePath)
@@ -154,7 +185,7 @@ public sealed class OmniRAGApp : IDisposable
         if (totalChunks == 0)
         {
             AnsiConsole.MarkupLine("[yellow]No documents indexed. Starting indexing process...[/]");
-            await IndexDocumentsAsync();
+            await this.IndexDocumentsAsync();
         }
         else
         {
@@ -167,7 +198,7 @@ public sealed class OmniRAGApp : IDisposable
             // Ask if user wants to re-index
             if (AnsiConsole.Confirm("Do you want to re-index documents?", false))
             {
-                await IndexDocumentsAsync();
+                await this.IndexDocumentsAsync();
             }
         }
 
@@ -267,18 +298,18 @@ public sealed class OmniRAGApp : IDisposable
             // Handle special commands
             if (query.Equals("index", StringComparison.OrdinalIgnoreCase))
             {
-                await IndexDocumentsAsync();
+                await this.IndexDocumentsAsync();
                 continue;
             }
 
             if (query.Equals("stats", StringComparison.OrdinalIgnoreCase))
             {
-                await ShowStatsAsync();
+                await this.ShowStatsAsync();
                 continue;
             }
 
             // Process query
-            await ProcessQueryAsync(query);
+            await this.ProcessQueryAsync(query);
             AnsiConsole.WriteLine();
         }
     }
@@ -365,7 +396,7 @@ public sealed class OmniRAGApp : IDisposable
 
     public void Dispose()
     {
-        StopDocumentMonitoringAsync().GetAwaiter().GetResult();
+        this.StopDocumentMonitoringAsync().GetAwaiter().GetResult();
         this.documentMonitor?.Dispose();
     }
 }

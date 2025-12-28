@@ -1,7 +1,15 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
-using System.Collections.Concurrent;
 
 namespace OmniRAG.Infrastructure.Repositories;
 
@@ -202,54 +210,79 @@ public sealed class FileSystemDocumentRepository : IDocumentRepository
             this.logger?.LogDebug("Refreshing document repository from: {BasePath}", this.basePath);
 
             string[] files = Directory.GetFiles(this.basePath, "*.*", SearchOption.TopDirectoryOnly);
-
-            // Track existing IDs
             HashSet<string> existingIds = new HashSet<string>(this.documentCache.Keys);
-            HashSet<string> scannedIds = new HashSet<string>();
-
-            foreach (string filePath in files)
-            {
-                try
-                {
-                    FileInfo fileInfo = new FileInfo(filePath);
-                    string id = Path.GetFileNameWithoutExtension(filePath);
-
-                    scannedIds.Add(id);
-
-                    // Add or update metadata
-                    DocumentMetadata metadata = new DocumentMetadata
-                    {
-                        Id = id,
-                        FilePath = Path.GetFullPath(filePath),
-                        FileName = Path.GetFileName(filePath),
-                        Size = fileInfo.Length,
-                        LastModified = fileInfo.LastWriteTimeUtc,
-                        Created = fileInfo.CreationTimeUtc,
-                        Extension = fileInfo.Extension,
-                        IsIndexed = this.documentCache.TryGetValue(id, out DocumentMetadata? existing) && existing.IsIndexed
-                    };
-
-                    this.documentCache[id] = metadata;
-                }
-                catch (Exception ex)
-                {
-                    this.logger?.LogWarning(ex, "Error scanning file: {FilePath}", filePath);
-                }
-            }
-
-            // Remove documents that no longer exist
-            IEnumerable<string> removedIds = existingIds.Except(scannedIds);
-            foreach (string id in removedIds)
-            {
-                this.documentCache.TryRemove(id, out _);
-                this.logger?.LogDebug("Removed document from cache (file deleted): {Id}", id);
-            }
+            HashSet<string> scannedIds = await this.ScanFilesAsync(files);
+            this.RemoveDeletedDocuments(existingIds, scannedIds);
 
             this.logger?.LogInformation("Repository refreshed: {Count} documents", this.documentCache.Count);
         }
         finally
         {
             this.refreshLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Scans files and updates document cache.
+    /// Reduces method complexity (Rule 8).
+    /// </summary>
+    private async Task<HashSet<string>> ScanFilesAsync(string[] files)
+    {
+        HashSet<string> scannedIds = new HashSet<string>();
+
+        foreach (string filePath in files)
+        {
+            try
+            {
+                await this.ProcessFileAsync(filePath, scannedIds);
+            }
+            catch (Exception ex)
+            {
+                this.logger?.LogWarning(ex, "Error scanning file: {FilePath}", filePath);
+            }
+        }
+
+        return scannedIds;
+    }
+
+    /// <summary>
+    /// Processes a single file and updates metadata.
+    /// Reduces method complexity (Rule 8).
+    /// </summary>
+    private async Task ProcessFileAsync(string filePath, HashSet<string> scannedIds)
+    {
+        await Task.CompletedTask;
+        FileInfo fileInfo = new FileInfo(filePath);
+        string id = Path.GetFileNameWithoutExtension(filePath);
+
+        scannedIds.Add(id);
+
+        DocumentMetadata metadata = new DocumentMetadata
+        {
+            Id = id,
+            FilePath = Path.GetFullPath(filePath),
+            FileName = Path.GetFileName(filePath),
+            Size = fileInfo.Length,
+            LastModified = fileInfo.LastWriteTimeUtc,
+            Created = fileInfo.CreationTimeUtc,
+            Extension = fileInfo.Extension,
+            IsIndexed = this.documentCache.TryGetValue(id, out DocumentMetadata? existing) && existing.IsIndexed
+        };
+
+        this.documentCache[id] = metadata;
+    }
+
+    /// <summary>
+    /// Removes documents that no longer exist on disk.
+    /// Reduces method complexity (Rule 8).
+    /// </summary>
+    private void RemoveDeletedDocuments(HashSet<string> existingIds, HashSet<string> scannedIds)
+    {
+        IEnumerable<string> removedIds = existingIds.Except(scannedIds);
+        foreach (string id in removedIds)
+        {
+            this.documentCache.TryRemove(id, out _);
+            this.logger?.LogDebug("Removed document from cache (file deleted): {Id}", id);
         }
     }
 

@@ -1,11 +1,22 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Onnx;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
 using Polly;
+
+using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Infrastructure.Resilience;
 
+#pragma warning disable SKEXP0010 // Suppress experimental API warnings for OpenAI connector
 #pragma warning disable SKEXP0070 // Suppress experimental API warnings for ONNX connector
 
 namespace OmniRAG.Infrastructure.LanguageModels;
@@ -40,8 +51,8 @@ public sealed class LlamaLanguageModel : ILanguageModel, IDisposable
     public LlamaLanguageModel(
         string modelPath, 
         string modelVariant = "Llama-3",
-        int maxTokens = 2048, 
-        float temperature = 0.7f, 
+        int maxTokens = DefaultValues.DefaultMaxTokens, 
+        float temperature = DefaultValues.DefaultTemperature, 
         ILogger<LlamaLanguageModel>? logger = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
@@ -52,9 +63,9 @@ public sealed class LlamaLanguageModel : ILanguageModel, IDisposable
             throw new DirectoryNotFoundException($"Llama model directory not found: {modelPath}");
         }
 
+        this.logger = logger;
         this.defaultMaxTokens = maxTokens;
         this.defaultTemperature = temperature;
-        this.logger = logger;
         this.ModelName = $"Llama ({modelVariant})";
 
         this.logger?.LogDebug("Initializing Llama model from path: {ModelPath}, variant: {Variant}, maxTokens: {MaxTokens}, temperature: {Temperature}", 
@@ -79,7 +90,7 @@ public sealed class LlamaLanguageModel : ILanguageModel, IDisposable
                 "[LLM unavailable] The Llama language model is currently unavailable. Please try again later.",
                 "LlamaInference");
 
-            IsInitialized = true;
+            this.IsInitialized = true;
             Console.WriteLine($"✓ Llama model loaded from: {modelPath} ({modelVariant})");
             this.logger?.LogInformation("Successfully loaded Llama model from: {ModelPath}, variant: {Variant}", modelPath, modelVariant);
         }
@@ -106,7 +117,7 @@ public sealed class LlamaLanguageModel : ILanguageModel, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        if (!IsInitialized)
+        if (!this.IsInitialized)
         {
             throw new InvalidOperationException("Model is not initialized.");
         }

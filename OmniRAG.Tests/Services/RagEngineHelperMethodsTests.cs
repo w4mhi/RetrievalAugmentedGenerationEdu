@@ -1,11 +1,20 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+
 using FluentAssertions;
+
 using Microsoft.Extensions.Logging;
+
 using Moq;
+
 using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 using OmniRAG.Core.Services;
-using System.Reflection;
+
 using Xunit;
 
 namespace OmniRAG.Tests.Services;
@@ -32,11 +41,11 @@ public class RagEngineHelperMethodsTests
         RetrievalOptions options = RetrievalOptions.Create(RetrievalStrategy.TopK, 5, 0.7f);
 
         this.ragEngine = new RagEngine(
+            options,
             this.mockDocumentLoader.Object,
             this.mockEmbeddingService.Object,
             this.mockVectorStore.Object,
             this.mockLanguageModel.Object,
-            options,
             null);
     }
 

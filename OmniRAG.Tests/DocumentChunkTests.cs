@@ -1,4 +1,8 @@
+using System;
+using System.Collections.Generic;
+
 using FluentAssertions;
+
 using OmniRAG.Core.Models;
 
 namespace OmniRAG.Tests.Core;

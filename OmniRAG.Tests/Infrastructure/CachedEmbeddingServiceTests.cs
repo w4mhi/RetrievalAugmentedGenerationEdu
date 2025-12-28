@@ -1,9 +1,19 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 using FluentAssertions;
+
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using Moq;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Infrastructure.Embeddings;
+
 using Xunit;
 
 namespace OmniRAG.Tests.Infrastructure;
@@ -33,8 +43,8 @@ public class CachedEmbeddingServiceTests : IDisposable
         this.cachedService = new CachedEmbeddingService(
             this.mockInnerService.Object,
             this.memoryCache,
-            NullLogger<CachedEmbeddingService>.Instance,
-            TimeSpan.FromHours(1));
+            TimeSpan.FromHours(1),
+            NullLogger<CachedEmbeddingService>.Instance);
     }
 
     [Fact]
@@ -44,6 +54,7 @@ public class CachedEmbeddingServiceTests : IDisposable
         Action act = () => new CachedEmbeddingService(
             null!,
             this.memoryCache,
+            null,
             NullLogger<CachedEmbeddingService>.Instance);
 
         // Assert
@@ -58,25 +69,12 @@ public class CachedEmbeddingServiceTests : IDisposable
         Action act = () => new CachedEmbeddingService(
             this.mockInnerService.Object,
             null!,
+            null,
             NullLogger<CachedEmbeddingService>.Instance);
 
         // Assert
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("cache");
-    }
-
-    [Fact]
-    public void Constructor_WithNullLogger_ThrowsArgumentNullException()
-    {
-        // Arrange & Act
-        Action act = () => new CachedEmbeddingService(
-            this.mockInnerService.Object,
-            this.memoryCache,
-            null!);
-
-        // Assert
-        act.Should().Throw<ArgumentNullException>()
-            .WithParameterName("logger");
     }
 
     [Fact]
@@ -326,8 +324,8 @@ public class CachedEmbeddingServiceTests : IDisposable
         CachedEmbeddingService shortCacheService = new CachedEmbeddingService(
             this.mockInnerService.Object,
             this.memoryCache,
-            NullLogger<CachedEmbeddingService>.Instance,
-            TimeSpan.FromMilliseconds(100));
+            TimeSpan.FromMilliseconds(100),
+            NullLogger<CachedEmbeddingService>.Instance);
 
         this.mockInnerService
             .Setup(x => x.GenerateEmbeddingAsync(testText, It.IsAny<CancellationToken>()))

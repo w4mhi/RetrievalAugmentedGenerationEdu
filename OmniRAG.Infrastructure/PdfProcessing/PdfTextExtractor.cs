@@ -1,4 +1,13 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+
 using Microsoft.Extensions.Logging;
+
+using OmniRAG.Core.Constants;
+
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 
@@ -80,7 +89,7 @@ public sealed class PdfTextExtractor
             if (wordLetters.Any())
             {
                 double wordFontSize = wordLetters.Average(l => l.PointSize);
-                if (wordFontSize > avgFontSize * 1.2) // 20% larger than average
+                if (wordFontSize > avgFontSize * DefaultValues.HeadingFontSizeMultiplier)
                 {
                     headings.Add(word.Text);
                 }

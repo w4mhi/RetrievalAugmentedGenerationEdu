@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+
 using Microsoft.Extensions.Options;
+
 using OmniRAG.Core.Configuration;
 
 namespace OmniRAG.Core.Validation;
@@ -9,6 +14,12 @@ namespace OmniRAG.Core.Validation;
 /// </summary>
 public class OmniRAGOptionsValidator : IValidateOptions<OmniRAGOptions>
 {
+    /// <summary>
+    /// Validates the OmniRAG configuration options.
+    /// </summary>
+    /// <param name="name">The name of the options instance.</param>
+    /// <param name="options">The options instance to validate.</param>
+    /// <returns>A ValidateOptionsResult indicating success or failure with error messages.</returns>
     public ValidateOptionsResult Validate(string? name, OmniRAGOptions options)
     {
         List<string> failures = new List<string>();

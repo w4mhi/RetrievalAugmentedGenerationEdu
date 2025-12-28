@@ -1,5 +1,10 @@
+using System;
+using System.IO;
+using System.Linq;
+
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Core.Models;
 
@@ -112,14 +117,14 @@ public static class EmbeddingServiceFactory
     /// </summary>
     /// <param name="innerService">The underlying embedding service to cache.</param>
     /// <param name="cache">The memory cache instance (configured with size limit).</param>
-    /// <param name="loggerFactory">Optional logger factory for creating typed loggers.</param>
     /// <param name="cacheExpiration">How long to cache embeddings (default: 24 hours).</param>
+    /// <param name="loggerFactory">Optional logger factory for creating typed loggers.</param>
     /// <returns>A cached embedding service.</returns>
     public static IEmbeddingService CreateCachedService(
         IEmbeddingService innerService,
         IMemoryCache cache,
-        ILoggerFactory? loggerFactory = null,
-        TimeSpan? cacheExpiration = null)
+        TimeSpan? cacheExpiration = null,
+        ILoggerFactory? loggerFactory = null)
     {
         ArgumentNullException.ThrowIfNull(innerService, nameof(innerService));
         ArgumentNullException.ThrowIfNull(cache, nameof(cache));
@@ -129,8 +134,8 @@ public static class EmbeddingServiceFactory
         return new CachedEmbeddingService(
             innerService,
             cache,
-            logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CachedEmbeddingService>.Instance,
-            cacheExpiration);
+            cacheExpiration,
+            logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CachedEmbeddingService>.Instance);
     }
 
     /// <summary>
@@ -140,18 +145,18 @@ public static class EmbeddingServiceFactory
     /// <param name="strategy">The embedding strategy to use.</param>
     /// <param name="modelsBasePath">Base path where ONNX models are stored.</param>
     /// <param name="cache">The memory cache instance (configured with size limit).</param>
-    /// <param name="loggerFactory">Optional logger factory for creating typed loggers.</param>
     /// <param name="cacheExpiration">How long to cache embeddings (default: 24 hours).</param>
+    /// <param name="loggerFactory">Optional logger factory for creating typed loggers.</param>
     /// <returns>A cached ONNX embedding service.</returns>
     public static IEmbeddingService CreateCachedOnnxService(
         EmbeddingStrategy strategy,
         string modelsBasePath,
         IMemoryCache cache,
-        ILoggerFactory? loggerFactory = null,
-        TimeSpan? cacheExpiration = null)
+        TimeSpan? cacheExpiration = null,
+        ILoggerFactory? loggerFactory = null)
     {
         IEmbeddingService onnxService = CreateOnnxService(strategy, modelsBasePath, loggerFactory);
-        return CreateCachedService(onnxService, cache, loggerFactory, cacheExpiration);
+        return CreateCachedService(onnxService, cache, cacheExpiration, loggerFactory);
     }
 
     /// <summary>
@@ -163,11 +168,11 @@ public static class EmbeddingServiceFactory
         string pythonDll,
         string pythonHome,
         IMemoryCache cache,
-        ILoggerFactory? loggerFactory = null,
-        TimeSpan? cacheExpiration = null)
+        TimeSpan? cacheExpiration = null,
+        ILoggerFactory? loggerFactory = null)
     {
         IEmbeddingService pythonService = CreatePythonNetService(strategy, pythonDll, pythonHome, loggerFactory);
-        return CreateCachedService(pythonService, cache, loggerFactory, cacheExpiration);
+        return CreateCachedService(pythonService, cache, cacheExpiration, loggerFactory);
     }
 }
 

@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using OmniRAG.Core.Models;
 
 namespace OmniRAG.Core.Interfaces;
@@ -16,7 +19,10 @@ public interface IVectorStore
     /// Performs similarity search for the given query embedding.
     /// Legacy method for backward compatibility.
     /// </summary>
-    Task<IReadOnlyList<SearchResult>> SearchAsync(float[] queryEmbedding, int topK = 5, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SearchResult>> SearchAsync(
+        float[] queryEmbedding, 
+        int topK = 5, 
+        CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Performs similarity search with configurable retrieval options.

@@ -1,8 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
+
 using Polly;
+
+using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Infrastructure.Resilience;
 
@@ -42,16 +50,16 @@ public sealed class GptLanguageModel : ILanguageModel, IDisposable
         string apiKey, 
         string modelName = "gpt-4-turbo",
         string? organizationId = null,
-        int maxTokens = 2048, 
-        float temperature = 0.7f, 
+        int maxTokens = DefaultValues.DefaultMaxTokens, 
+        float temperature = DefaultValues.DefaultTemperature, 
         ILogger<GptLanguageModel>? logger = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
+        this.logger = logger;
         this.defaultMaxTokens = maxTokens;
         this.defaultTemperature = temperature;
-        this.logger = logger;
         this.ModelName = $"OpenAI ({modelName})";
 
         this.logger?.LogDebug("Initializing GPT model: {ModelName}, maxTokens: {MaxTokens}, temperature: {Temperature}", 
@@ -77,7 +85,7 @@ public sealed class GptLanguageModel : ILanguageModel, IDisposable
                 "[LLM unavailable] The OpenAI GPT model is currently unavailable. Please try again later.",
                 "GptInference");
 
-            IsInitialized = true;
+            this.IsInitialized = true;
             Console.WriteLine($"✓ GPT model loaded: {modelName}");
             this.logger?.LogInformation("Successfully loaded GPT model: {ModelName}", modelName);
         }
@@ -104,7 +112,7 @@ public sealed class GptLanguageModel : ILanguageModel, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        if (!IsInitialized)
+        if (!this.IsInitialized)
         {
             throw new InvalidOperationException("Model is not initialized.");
         }

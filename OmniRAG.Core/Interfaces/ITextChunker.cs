@@ -1,6 +1,8 @@
-namespace OmniRAG.Core.Interfaces;
+using System.Collections.Generic;
 
 using OmniRAG.Core.Models;
+
+namespace OmniRAG.Core.Interfaces;
 
 /// <summary>
 /// Interface for text chunking strategies.

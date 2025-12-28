@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using OmniRAG.Core.Models;
 
 namespace OmniRAG.Core.Interfaces;
@@ -34,7 +37,9 @@ public interface IDocumentRepository
     /// <param name="extension">File extension to filter by (e.g., ".pdf").</param>
     /// <param name="cancellationToken">Cancellation token for async operation.</param>
     /// <returns>Collection of document metadata matching the extension.</returns>
-    Task<IEnumerable<DocumentMetadata>> GetByExtensionAsync(string extension, CancellationToken cancellationToken = default);
+    Task<IEnumerable<DocumentMetadata>> GetByExtensionAsync(
+        string extension, 
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets a document by its unique identifier.
@@ -42,7 +47,9 @@ public interface IDocumentRepository
     /// <param name="id">The document identifier.</param>
     /// <param name="cancellationToken">Cancellation token for async operation.</param>
     /// <returns>The document with full content, or null if not found.</returns>
-    Task<Document?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
+    Task<Document?> GetByIdAsync(
+        string id, 
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets a document by its file path.
@@ -50,7 +57,9 @@ public interface IDocumentRepository
     /// <param name="filePath">The absolute file path.</param>
     /// <param name="cancellationToken">Cancellation token for async operation.</param>
     /// <returns>The document with full content, or null if not found.</returns>
-    Task<Document?> GetByFilePathAsync(string filePath, CancellationToken cancellationToken = default);
+    Task<Document?> GetByFilePathAsync(
+        string filePath, 
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Adds a new document to the repository.
@@ -58,8 +67,12 @@ public interface IDocumentRepository
     /// <param name="document">The document to add.</param>
     /// <param name="cancellationToken">Cancellation token for async operation.</param>
     /// <returns>The document ID of the added document.</returns>
-    /// <exception cref="InvalidOperationException">Thrown if document with same ID already exists.</exception>
-    Task<string> AddAsync(Document document, CancellationToken cancellationToken = default);
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if document with same ID already exists.
+    /// </exception>
+    Task<string> AddAsync(
+        Document document, 
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Updates an existing document in the repository.
@@ -67,7 +80,9 @@ public interface IDocumentRepository
     /// <param name="document">The document to update.</param>
     /// <param name="cancellationToken">Cancellation token for async operation.</param>
     /// <exception cref="InvalidOperationException">Thrown if document does not exist.</exception>
-    Task UpdateAsync(Document document, CancellationToken cancellationToken = default);
+    Task UpdateAsync(
+        Document document, 
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes a document by its identifier.
@@ -75,7 +90,9 @@ public interface IDocumentRepository
     /// <param name="id">The document identifier.</param>
     /// <param name="cancellationToken">Cancellation token for async operation.</param>
     /// <returns>True if document was deleted, false if not found.</returns>
-    Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(
+        string id, 
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Checks if a document exists by its identifier.
@@ -83,7 +100,9 @@ public interface IDocumentRepository
     /// <param name="id">The document identifier.</param>
     /// <param name="cancellationToken">Cancellation token for async operation.</param>
     /// <returns>True if document exists, false otherwise.</returns>
-    Task<bool> ExistsAsync(string id, CancellationToken cancellationToken = default);
+    Task<bool> ExistsAsync(
+        string id, 
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the total count of documents in the repository.

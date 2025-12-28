@@ -1,8 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Onnx;
+
 using Polly;
+
 using OmniRAG.Core.Constants;
 using OmniRAG.Core.Interfaces;
 using OmniRAG.Infrastructure.Resilience;
@@ -36,7 +44,7 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
     /// <param name="maxTokens">Default maximum tokens to generate.</param>
     /// <param name="temperature">Default temperature for generation.</param>
     /// <param name="logger">Optional logger for diagnostics.</param>
-    public Phi4LanguageModel(string modelPath, int maxTokens = 2048, float temperature = 0.7f, ILogger<Phi4LanguageModel>? logger = null)
+    public Phi4LanguageModel(string modelPath, int maxTokens = DefaultValues.DefaultMaxTokens, float temperature = DefaultValues.DefaultTemperature, ILogger<Phi4LanguageModel>? logger = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
 
@@ -45,9 +53,9 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
             throw new DirectoryNotFoundException($"Phi-4 model directory not found: {modelPath}");
         }
 
+        this.logger = logger;
         this.defaultMaxTokens = maxTokens;
         this.defaultTemperature = temperature;
-        this.logger = logger;
         this.ModelName = "Phi-4 Mini";
 
         this.logger?.LogDebug(LogMessages.InitializingLanguageModel, 
@@ -72,7 +80,7 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
                 FallbackMessages.LlmUnavailableRetryLater,
                 "Phi4Inference");
 
-            IsInitialized = true;
+            this.IsInitialized = true;
             Console.WriteLine($"✓ Phi-4 model loaded from: {modelPath}");
             this.logger?.LogInformation(LogMessages.LanguageModelLoaded, modelPath);
         }
@@ -99,7 +107,7 @@ public sealed class Phi4LanguageModel : ILanguageModel, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
-        if (!IsInitialized)
+        if (!this.IsInitialized)
         {
             throw new InvalidOperationException("Model is not initialized. Call Initialize() first.");
         }

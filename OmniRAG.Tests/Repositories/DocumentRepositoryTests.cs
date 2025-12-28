@@ -1,6 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+
 using FluentAssertions;
+
 using OmniRAG.Core.Models;
 using OmniRAG.Infrastructure.Repositories;
+
 using Xunit;
 
 namespace OmniRAG.Tests.Repositories;
@@ -28,8 +36,6 @@ public sealed class DocumentRepositoryTests : IDisposable
             Directory.Delete(this.testDirectory, recursive: true);
         }
     }
-
-    #region InMemoryDocumentRepository Tests
 
     [Fact]
     public async Task InMemory_AddAsync_AddsDocumentSuccessfully()
@@ -207,10 +213,6 @@ public sealed class DocumentRepositoryTests : IDisposable
         count.Should().Be(3);
     }
 
-    #endregion
-
-    #region FileSystemDocumentRepository Tests
-
     [Fact]
     public void FileSystem_Constructor_CreatesDirectoryIfNotExists()
     {
@@ -377,10 +379,6 @@ public sealed class DocumentRepositoryTests : IDisposable
         document!.FilePath.Should().Be(Path.GetFullPath(testFile));
     }
 
-    #endregion
-
-    #region Helper Methods
-
     private Document CreateTestDocument(
         string id,
         string fileName,
@@ -400,6 +398,4 @@ public sealed class DocumentRepositoryTests : IDisposable
             IsIndexed = false
         };
     }
-
-    #endregion
 }
